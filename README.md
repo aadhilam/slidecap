@@ -61,8 +61,8 @@ slidecap --url "https://www.youtube.com/watch?v=abc123" --json
 - `--images-dir` (optional): Slide images folder. Defaults to `./slidecap/slides/`.
 - `--similarity-threshold` (default `0.85`): Slide detection threshold.
 - `--sample-rate` (default `1.0`): Frame sampling interval in seconds.
-- `--whisper-model` (default `base`): Whisper model name.
-- `--language`: Optional transcription language.
+- `--whisper-model` (default `base`): Whisper model name. See [Whisper Models](#whisper-models) below.
+- `--language`: Optional transcription language code (e.g. `en`, `de`, `ja`).
 - `--image-format` (default `jpg`): `jpg` or `png`.
 - `--image-quality` (default `90`): JPEG quality.
 - `--allow-lower-quality`: Fallback below 1080p if exact 1080p is unavailable.
@@ -70,6 +70,21 @@ slidecap --url "https://www.youtube.com/watch?v=abc123" --json
 - `--keep-temp`: Keep temp downloads for debugging.
 - `--log-level` (default `info`): `debug|info|warn|error`.
 - `--json`: Print structured JSON result (success or error) for agent workflows.
+
+## Whisper Models
+
+| Model | Speed | Accuracy | Notes |
+|---|---|---|---|
+| `tiny` | Fastest | Lowest | Quick drafts |
+| `base` | Fast | Good | **Default** |
+| `small` | Moderate | Better | Good general choice |
+| `medium` | Slow | Strong | |
+| `large` | Slowest | Best | |
+| `large-v2` | Slowest | Best | Improved large |
+| `large-v3` | Slowest | Best | Latest multilingual |
+| `turbo` | Fast | Very good | Efficient alternative to large |
+
+English-only variants (`tiny.en`, `base.en`, `small.en`, `medium.en`) are faster than their multilingual counterparts when transcribing English content.
 
 ## Output Format
 

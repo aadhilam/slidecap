@@ -42,7 +42,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--whisper-model",
         default="base",
-        help="Whisper model name (tiny, base, small, medium, large). Default: base.",
+        help=(
+            "Whisper model name. Default: base. "
+            "Multilingual: tiny, base, small, medium, large, large-v2, large-v3, turbo. "
+            "English-only (faster): tiny.en, base.en, small.en, medium.en."
+        ),
     )
     parser.add_argument("--language", default=None, help="Optional transcription language code (e.g. en).")
     parser.add_argument(
