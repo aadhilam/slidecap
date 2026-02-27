@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "slidecap"
+version = "0.1.0"
+description = "CLI tool to generate slide-aligned markdown notes from YouTube videos."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+  "numpy",
+  "opencv-python",
+  "openai-whisper",
+  "Pillow",
+  "scikit-image",
+  "yt-dlp",
+]
+
+[project.scripts]
+slidecap = "slidecap.cli:main"
+
+[tool.setuptools]
+packages = ["slidecap"]

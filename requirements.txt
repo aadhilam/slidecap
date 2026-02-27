@@ -1,0 +1,6 @@
+numpy
+opencv-python
+openai-whisper
+Pillow
+scikit-image
+yt-dlp

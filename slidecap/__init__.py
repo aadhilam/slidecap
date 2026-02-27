@@ -1,0 +1,5 @@
+"""slidecap package."""
+
+from .core import PipelineResult, run_pipeline
+
+__all__ = ["run_pipeline", "PipelineResult"]
