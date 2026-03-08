@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -17,8 +18,10 @@ from urllib.parse import parse_qs, urlparse
 
 import cv2
 import whisper
+import yt_dlp
 from PIL import Image
 from skimage.metrics import structural_similarity as ssim
+from tqdm import tqdm
 
 LOGGER = logging.getLogger(__name__)
 
@@ -141,23 +144,59 @@ def _run_command(cmd: Iterable[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(list(cmd), capture_output=True, text=True)
 
 
+def _make_progress_hook() -> callable:
+    """Return a yt-dlp progress_hooks callback that drives a tqdm bar."""
+    pbar = None
+
+    def hook(d: dict) -> None:
+        nonlocal pbar
+        status = d.get("status")
+
+        if status == "downloading":
+            total = d.get("total_bytes") or d.get("total_bytes_estimate")
+            downloaded = d.get("downloaded_bytes", 0)
+
+            if pbar is None and total:
+                pbar = tqdm(
+                    total=total,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                    desc="Downloading",
+                    file=sys.stderr,
+                )
+            if pbar is not None:
+                if total and pbar.total != total:
+                    pbar.total = total
+                    pbar.refresh()
+                pbar.n = downloaded
+                pbar.refresh()
+
+        elif status == "finished":
+            if pbar is not None:
+                pbar.close()
+                pbar = None
+
+    return hook
+
+
 def _download_video(youtube_url: str, video_path: Path, allow_lower_quality: bool) -> tuple[Path, str]:
     format_string = build_1080p_format_string(allow_lower_quality)
-    cmd = [
-        "yt-dlp",
-        "-f",
-        format_string,
-        "--merge-output-format",
-        "mp4",
-        "--write-info-json",
-        "--no-playlist",
-        "-o",
-        str(video_path),
-        youtube_url,
-    ]
-    result = _run_command(cmd)
-    if result.returncode != 0:
-        raise RuntimeError(f"yt-dlp download failed:\n{result.stderr.strip()}")
+    ydl_opts = {
+        "format": format_string,
+        "merge_output_format": "mp4",
+        "writeinfojson": True,
+        "noplaylist": True,
+        "outtmpl": {"default": str(video_path)},
+        "progress_hooks": [_make_progress_hook()],
+        "quiet": True,
+        "no_warnings": True,
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([youtube_url])
+    except yt_dlp.DownloadError as exc:
+        raise RuntimeError(f"yt-dlp download failed:\n{exc}") from exc
     LOGGER.info("Video downloaded: %s", video_path)
     return video_path, format_string
 
