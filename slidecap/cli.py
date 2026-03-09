@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="medium",
         help=(
             "Whisper model name. Default: medium. "
-            "Multilingual: tiny, base, small, medium, large, large-v2, large-v3, turbo. "
+            "Multilingual: tiny, base, small, medium, large, large-v1, large-v2, large-v3, large-v3-turbo, turbo. "
             "English-only (faster): tiny.en, base.en, small.en, medium.en."
         ),
     )
@@ -82,6 +82,15 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+_VALID_WHISPER_MODELS = frozenset(
+    [
+        "tiny", "tiny.en", "base", "base.en", "small", "small.en",
+        "medium", "medium.en", "large", "large-v1", "large-v2",
+        "large-v3", "large-v3-turbo", "turbo",
+    ]
+)
+
+
 def _validate_args(args: argparse.Namespace) -> None:
     if not (0.5 <= args.similarity_threshold <= 0.95):
         raise ValueError("--similarity-threshold must be between 0.5 and 0.95.")
@@ -89,6 +98,9 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--sample-rate must be > 0.")
     if not (1 <= args.image_quality <= 100):
         raise ValueError("--image-quality must be between 1 and 100.")
+    if args.whisper_model not in _VALID_WHISPER_MODELS:
+        valid = ", ".join(sorted(_VALID_WHISPER_MODELS))
+        raise ValueError(f"--whisper-model '{args.whisper_model}' is not supported. Valid models: {valid}")
 
 
 def main() -> int:

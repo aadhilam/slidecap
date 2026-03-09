@@ -61,7 +61,7 @@ slidecap --url "https://www.youtube.com/watch?v=abc123" --json
 - `--images-dir` (optional): Slide images folder. Defaults to `./slidecap/slides/`.
 - `--similarity-threshold` (default `0.85`): Slide detection threshold.
 - `--sample-rate` (default `1.0`): Frame sampling interval in seconds.
-- `--whisper-model` (default `base`): Whisper model name. See [Whisper Models](#whisper-models) below.
+- `--whisper-model` (default `medium`): Whisper model name. See [Whisper Models](#whisper-models) below.
 - `--language`: Optional transcription language code (e.g. `en`, `de`, `ja`).
 - `--image-format` (default `jpg`): `jpg` or `png`.
 - `--image-quality` (default `90`): JPEG quality.
@@ -76,13 +76,15 @@ slidecap --url "https://www.youtube.com/watch?v=abc123" --json
 | Model | Speed | Accuracy | Notes |
 |---|---|---|---|
 | `tiny` | Fastest | Lowest | Quick drafts |
-| `base` | Fast | Good | **Default** |
+| `base` | Fast | Good | |
 | `small` | Moderate | Better | Good general choice |
-| `medium` | Slow | Strong | |
-| `large` | Slowest | Best | |
+| `medium` | Slow | Strong | **Default** |
+| `large` | Slowest | Best | Alias for latest large |
+| `large-v1` | Slowest | Best | Original large |
 | `large-v2` | Slowest | Best | Improved large |
 | `large-v3` | Slowest | Best | Latest multilingual |
-| `turbo` | Fast | Very good | Efficient alternative to large |
+| `large-v3-turbo` | Fast | Very good | Distilled large-v3 |
+| `turbo` | Fast | Very good | Alias for large-v3-turbo |
 
 English-only variants (`tiny.en`, `base.en`, `small.en`, `medium.en`) are faster than their multilingual counterparts when transcribing English content.
 
@@ -118,7 +120,7 @@ Success:
   "download_format": "bestvideo[height=1080]+bestaudio/best[height=1080]",
   "similarity_threshold": 0.85,
   "sample_rate": 1.0,
-  "whisper_model": "base",
+  "whisper_model": "medium",
   "language": "en",
   "started_at": "2026-02-23T00:00:00+00:00",
   "completed_at": "2026-02-23T00:03:00+00:00",
