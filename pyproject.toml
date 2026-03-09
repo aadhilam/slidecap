@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "slidecap"
-version = "0.2.0"
+version = "0.2.1"
 description = "CLI tool to generate slide-aligned markdown notes from YouTube videos."
 readme = "README.md"
 license = "MIT"
