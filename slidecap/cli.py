@@ -41,9 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--whisper-model",
-        default="base",
+        default="medium",
         help=(
-            "Whisper model name. Default: base. "
+            "Whisper model name. Default: medium. "
             "Multilingual: tiny, base, small, medium, large, large-v2, large-v3, turbo. "
             "English-only (faster): tiny.en, base.en, small.en, medium.en."
         ),
