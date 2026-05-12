@@ -38,6 +38,7 @@ class Slide:
 @dataclass
 class PipelineResult:
     status: str
+    source_type: str
     url: str
     video_id: str
     output_markdown: str
@@ -60,6 +61,7 @@ class PipelineResult:
     def to_dict(self) -> dict:
         return {
             "status": self.status,
+            "source_type": self.source_type,
             "url": self.url,
             "video_id": self.video_id,
             "output_markdown": self.output_markdown,
@@ -81,11 +83,32 @@ class PipelineResult:
         }
 
 
-def _check_runtime_dependencies() -> None:
-    missing = [cmd for cmd in ("yt-dlp", "ffmpeg") if shutil.which(cmd) is None]
+def _check_runtime_dependencies(*, require_ytdlp: bool = True) -> None:
+    required = ["ffmpeg"]
+    if require_ytdlp:
+        required.append("yt-dlp")
+    missing = [cmd for cmd in required if shutil.which(cmd) is None]
     if missing:
         missing_list = ", ".join(missing)
         raise RuntimeError(f"Missing required system binaries: {missing_list}")
+
+
+def _probe_video_info(video_path: Path) -> dict:
+    """Read basic video metadata via OpenCV (no yt-dlp needed)."""
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise RuntimeError(
+            f"Cannot open video file: {video_path}. "
+            "Ensure the file is a valid video and the required codecs are available."
+        )
+    info = {
+        "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0),
+        "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0),
+        "fps": cap.get(cv2.CAP_PROP_FPS) or 0.0,
+        "format_note": "local",
+    }
+    cap.release()
+    return info
 
 
 def _extract_video_id(youtube_url: str) -> str:
@@ -331,15 +354,18 @@ def _write_slide_images(
     video_id: str,
     image_format: str,
     image_quality: int,
+    *,
+    name_prefix: str | None = None,
 ) -> list[Path]:
     images_dir.mkdir(parents=True, exist_ok=True)
     output_paths: list[Path] = []
 
     pil_format = "JPEG" if image_format == "jpg" else "PNG"
     extension = "jpg" if image_format == "jpg" else "png"
+    prefix = name_prefix if name_prefix is not None else f"yt_{video_id}"
 
     for idx, (timestamp, image) in enumerate(slides, start=1):
-        file_name = f"yt_{video_id}_slide_{idx:03d}_t{int(timestamp):06d}.{extension}"
+        file_name = f"{prefix}_slide_{idx:03d}_t{int(timestamp):06d}.{extension}"
         out_path = images_dir / file_name
         if image_format == "jpg":
             if image.mode in ("RGBA", "LA", "P"):
@@ -360,23 +386,35 @@ def _anchor_for_slide(slide_num: int, timestamp: float) -> str:
 
 
 def _build_markdown(
-    youtube_url: str,
-    video_id: str,
     slide_records: list[Slide],
-    format_string: str,
+    *,
+    source_label: str,
+    video_id: str = "",
+    format_string: str = "",
+    is_local: bool = False,
 ) -> str:
     generated = datetime.now(timezone.utc).isoformat()
-    lines = [
-        "# YouTube Slide Transcript",
-        "",
-        f"- Source: {youtube_url}",
-        f"- Video ID: {video_id}",
-        f"- Generated: {generated}",
-        f"- Slide Count: {len(slide_records)}",
-        f"- Download Format: `{format_string}`",
-        "",
-        "## Table of Contents",
-    ]
+
+    if is_local:
+        lines = [
+            "# Video Slide Transcript",
+            "",
+            f"- Source: {source_label}",
+            f"- Generated: {generated}",
+            f"- Slide Count: {len(slide_records)}",
+        ]
+    else:
+        lines = [
+            "# YouTube Slide Transcript",
+            "",
+            f"- Source: {source_label}",
+            f"- Video ID: {video_id}",
+            f"- Generated: {generated}",
+            f"- Slide Count: {len(slide_records)}",
+            f"- Download Format: `{format_string}`",
+        ]
+
+    lines.extend(["", "## Table of Contents"])
 
     for slide in slide_records:
         anchor = _anchor_for_slide(slide.slide_num, slide.timestamp)
@@ -391,8 +429,13 @@ def _build_markdown(
                 f"## Slide {slide.slide_num} ({slide.timestamp:.1f}s)",
                 f'<a id="{anchor}"></a>',
                 "",
-                f"YouTube Link: {slide.youtube_link}",
-                "",
+            ]
+        )
+        if slide.youtube_link:
+            lines.append(f"YouTube Link: {slide.youtube_link}")
+            lines.append("")
+        lines.extend(
+            [
                 f"![Slide {slide.slide_num}]({slide.image_path})",
                 "",
                 "Transcript:",
@@ -434,13 +477,21 @@ def _sanitize_filename(name: str, max_length: int = 100) -> str:
     return (sanitized[:max_length].rstrip() if len(sanitized) > max_length else sanitized) or "untitled"
 
 
-def resolve_output_paths(url: str, out_md: str | None, images_dir: str | None) -> tuple[Path, Path]:
+def resolve_output_paths(
+    url: str | None, out_md: str | None, images_dir: str | None, *, local_file: str | None = None,
+) -> tuple[Path, Path]:
     """Return resolved (out_md, images_dir) paths, filling in defaults when not provided."""
     base_dir = Path.cwd() / "slidecap"
 
     if out_md is None:
-        title = _fetch_video_title(url)
-        filename = (_sanitize_filename(title) if title else _extract_video_id(url)) + ".md"
+        if local_file is not None:
+            stem = Path(local_file).stem
+            filename = _sanitize_filename(stem) + ".md"
+        elif url is not None:
+            title = _fetch_video_title(url)
+            filename = (_sanitize_filename(title) if title else _extract_video_id(url)) + ".md"
+        else:
+            raise ValueError("Either url or local_file must be provided when out_md is not specified.")
         resolved_out_md = base_dir / filename
     else:
         resolved_out_md = Path(out_md).expanduser().resolve()
@@ -454,12 +505,19 @@ def resolve_output_paths(url: str, out_md: str | None, images_dir: str | None) -
 
 
 def run_pipeline(args: argparse.Namespace) -> PipelineResult:
-    _check_runtime_dependencies()
+    is_local = getattr(args, "file", None) is not None
+    _check_runtime_dependencies(require_ytdlp=not is_local)
+
     started_at_dt = datetime.now(timezone.utc)
     started_at = started_at_dt.isoformat()
     start_time = time.time()
 
-    out_md, images_dir = resolve_output_paths(args.url, args.out_md, args.images_dir)
+    if is_local:
+        out_md, images_dir = resolve_output_paths(
+            url=None, out_md=args.out_md, images_dir=args.images_dir, local_file=args.file,
+        )
+    else:
+        out_md, images_dir = resolve_output_paths(args.url, args.out_md, args.images_dir)
 
     if out_md.exists() and not args.overwrite:
         raise FileExistsError(f"Output markdown already exists: {out_md}. Use --overwrite.")
@@ -476,14 +534,20 @@ def run_pipeline(args: argparse.Namespace) -> PipelineResult:
         should_cleanup = True
 
     try:
-        video_path = temp_dir / "video.mp4"
         audio_path = temp_dir / "audio.mp3"
 
-        downloaded_video, format_string = _download_video(args.url, video_path, args.allow_lower_quality)
-        info = _read_download_info(downloaded_video)
+        if is_local:
+            video_path = Path(args.file)
+            format_string = "local"
+            info = _probe_video_info(video_path)
+        else:
+            video_path = temp_dir / "video.mp4"
+            downloaded_video, format_string = _download_video(args.url, video_path, args.allow_lower_quality)
+            info = _read_download_info(downloaded_video)
+
         if info:
             LOGGER.info(
-                "Downloaded resolution: %sx%s, fps: %s, format: %s",
+                "Video resolution: %sx%s, fps: %s, format: %s",
                 info.get("width", "unknown"),
                 info.get("height", "unknown"),
                 info.get("fps", "unknown"),
@@ -498,13 +562,21 @@ def run_pipeline(args: argparse.Namespace) -> PipelineResult:
         _transcript, segments = _transcribe_audio(audio_path, args.whisper_model, args.language)
         slide_timestamps = [s[0] for s in slides]
         transcript_chunks = _align_transcript_to_slides(segments, slide_timestamps)
-        video_id = _extract_video_id(args.url)
+
+        if is_local:
+            video_id = ""
+            name_prefix = _sanitize_filename(Path(args.file).stem)
+        else:
+            video_id = _extract_video_id(args.url)
+            name_prefix = None
+
         image_paths = _write_slide_images(
             slides,
             images_dir,
             video_id=video_id,
             image_format=args.image_format,
             image_quality=args.image_quality,
+            name_prefix=name_prefix,
         )
 
         slide_records: list[Slide] = []
@@ -512,21 +584,24 @@ def run_pipeline(args: argparse.Namespace) -> PipelineResult:
             zip(slides, transcript_chunks, image_paths), start=1
         ):
             relative_img_path = os.path.relpath(image_path, start=out_md.parent).replace(os.sep, "/")
+            yt_link = "" if is_local else generate_youtube_timestamp_url(args.url, timestamp)
             slide_records.append(
                 Slide(
                     slide_num=idx,
                     timestamp=timestamp,
                     image_path=relative_img_path,
                     transcript=transcript_chunk,
-                    youtube_link=generate_youtube_timestamp_url(args.url, timestamp),
+                    youtube_link=yt_link,
                 )
             )
 
+        source_label = str(Path(args.file).name) if is_local else args.url
         markdown = _build_markdown(
-            youtube_url=args.url,
+            slide_records,
+            source_label=source_label,
             video_id=video_id,
-            slide_records=slide_records,
             format_string=format_string,
+            is_local=is_local,
         )
         out_md.write_text(markdown, encoding="utf-8")
         LOGGER.info("Markdown written: %s", out_md)
@@ -545,7 +620,8 @@ def run_pipeline(args: argparse.Namespace) -> PipelineResult:
 
         return PipelineResult(
             status="ok",
-            url=args.url,
+            source_type="local" if is_local else "youtube",
+            url=args.file if is_local else args.url,
             video_id=video_id,
             output_markdown=str(out_md),
             images_dir=str(images_dir),

@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import sys
+from pathlib import Path
 
 try:
     from .core import run_pipeline
@@ -14,9 +15,11 @@ except ImportError:  # pragma: no cover - enables direct script invocation
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="slidecap",
-        description="Generate slide-aligned markdown notes from a YouTube URL.",
+        description="Generate slide-aligned markdown notes from a YouTube URL or local video file.",
     )
-    parser.add_argument("--url", required=True, help="YouTube URL to process.")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--url", help="YouTube URL to process.")
+    source.add_argument("--file", help="Path to a local video file.")
     parser.add_argument(
         "--out-md",
         default=None,
@@ -101,6 +104,15 @@ def _validate_args(args: argparse.Namespace) -> None:
     if args.whisper_model not in _VALID_WHISPER_MODELS:
         valid = ", ".join(sorted(_VALID_WHISPER_MODELS))
         raise ValueError(f"--whisper-model '{args.whisper_model}' is not supported. Valid models: {valid}")
+    if args.file is not None:
+        file_path = Path(args.file).expanduser().resolve()
+        if not file_path.exists():
+            raise FileNotFoundError(f"--file path does not exist: {file_path}")
+        if not file_path.is_file():
+            raise ValueError(f"--file path is not a file: {file_path}")
+        args.file = str(file_path)
+        if args.allow_lower_quality:
+            logging.warning("--allow-lower-quality is ignored when using --file (local file).")
 
 
 def main() -> int:
